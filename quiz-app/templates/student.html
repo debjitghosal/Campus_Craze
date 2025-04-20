@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en" class="transition-colors duration-300">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Quiz Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <style>
+        body {
+            background: radial-gradient(ellipse at center, #0b0c2a 0%, #060717 100%);
+            overflow-x: hidden;
+        }
+
+        .stars {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 3s infinite ease-in-out;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.2; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="text-yellow-200 font-mono relative min-h-screen flex flex-col items-center p-6">
+
+    <!-- Stars Background -->
+    <div class="stars" id="star-bg"></div>
+
+    <!-- Header -->
+    <h1 class="text-4xl font-bold mb-6 text-yellow-400 z-10">🚀 Interstellar Quiz Portal</h1>
+
+    <!-- Name Input -->
+    <div class="w-full max-w-md bg-black/30 backdrop-blur-lg p-6 rounded-xl border border-yellow-500 z-10">
+        <input type="text" id="student-name"
+               class="w-full p-3 mb-4 rounded-lg border border-yellow-400 bg-black text-yellow-100 placeholder-yellow-300 focus:outline-none"
+               placeholder="Enter your name..." required>
+        <div id="timer" class="text-center text-xl font-semibold text-yellow-300 mb-4"></div>
+        <div id="quiz-area" class="text-white space-y-6 text-lg">🛰️ Waiting for the quiz from Mission Control...</div>
+    </div>
+
+    <script>
+        const socket = io();
+        let currentQuiz = null;
+        let timerInterval;
+
+        function generateStars(count) {
+            const starContainer = document.getElementById('star-bg');
+            starContainer.innerHTML = '';
+            for (let i = 0; i < count; i++) {
+                const star = document.createElement('div');
+                star.classList.add('star');
+                star.style.top = `${Math.random() * 100}vh`;
+                star.style.left = `${Math.random() * 100}vw`;
+                star.style.animationDuration = `${2 + Math.random() * 6}s`;
+                star.style.animationDelay = `${Math.random() * 5}s`;
+                starContainer.appendChild(star);
+            }
+        }
+
+        generateStars(150);
+
+        socket.on('receive_quiz', function(data) {
+            currentQuiz = data.questions;
+            const timeLimit = data.timer;
+            const quizArea = document.getElementById('quiz-area');
+
+            let html = `<form id="answer-form" class="space-y-6">`;
+            currentQuiz.forEach((q, idx) => {
+                html += `<div><h3 class="font-bold text-yellow-300 mb-2">${q.question}</h3>`;
+                q.options.forEach(opt => {
+                    html += `<label class="block">
+                                <input type="radio" name="q${idx}" value="${opt}" class="mr-2"> ${opt}
+                            </label>`;
+                });
+                html += `</div>`;
+            });
+            html += `<button type="submit" class="mt-6 bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-2 px-6 rounded-lg transition">Submit</button></form>`;
+            quizArea.innerHTML = html;
+
+            let timeLeft = timeLimit;
+            const timerDiv = document.getElementById('timer');
+            timerDiv.textContent = `⏳ Time Left: ${timeLeft} seconds`;
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerDiv.textContent = `⏳ Time Left: ${timeLeft} seconds`;
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    submitFormAuto();
+                }
+            }, 1000);
+
+            document.getElementById('answer-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                submitForm();
+            });
+        });
+
+        function submitForm() {
+            const studentName = document.getElementById('student-name').value.trim();
+            const answers = {};
+            currentQuiz.forEach((q, idx) => {
+                const selected = document.querySelector(`input[name="q${idx}"]:checked`);
+                if (selected) {
+                    answers[q.question] = selected.value;
+                }
+            });
+
+            if (studentName === "") {
+                alert("🚨 Please enter your name before submitting.");
+                return;
+            }
+
+            socket.emit('submit_answers', {
+                name: studentName,
+                answers: answers
+            });
+
+            document.getElementById('quiz-area').innerHTML = '<h2 class="text-center text-2xl text-green-400 font-bold">✅ Your answers have been transmitted successfully. Good luck!</h2>';
+            clearInterval(timerInterval);
+            document.getElementById('timer').innerHTML = '';
+        }
+
+        function submitFormAuto() {
+            const form = document.getElementById('answer-form');
+            if (form) {
+                submitForm();
+            }
+        }
+    </script>
+</body>
+</html>
